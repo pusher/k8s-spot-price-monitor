@@ -47,7 +47,7 @@ def get_args():
         current spot prices as prometheus metrics'''
     )
 
-    parser.add_argument('--incluster', type=bool, default=False,
+    parser.add_argument('--running-in-cluster', type=bool, default=False,
                         help='''Will load kubernetes config from the pod
                         environment if running within the cluster, else loads a
                         kubeconfig from the running environemnt''')
@@ -80,7 +80,7 @@ def update_spot_price_metrics(metric, prices):
 if __name__ == '__main__':
     args = get_args()
 
-    if args.incluster:
+    if args.running_in_cluster:
         config.incluster_config.load_incluster_config()
     else:
         config.load_kube_config()
