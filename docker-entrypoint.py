@@ -78,7 +78,7 @@ if __name__ == '__main__':
     ec2 = boto3.client('ec2', args.region)
     start_http_server(8000)
 
-    s = Gauge('aws_spot_price',
+    s = Gauge('aws_spot_price_dollars_per_hour',
               'Reports the AWS spot price of node types used in the cluster',
               ['instance_type', 'availability_zone']
               )
