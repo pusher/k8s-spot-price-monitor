@@ -47,12 +47,23 @@ def get_args():
         current spot prices as prometheus metrics'''
     )
 
-    parser.add_argument('--incluster', type=bool, default=False)
+    parser.add_argument('--incluster', type=bool, default=False,
+                        help='''Will load kubernetes config from the pod
+                        environment if running within the cluster, else loads a
+                        kubeconfig from the running environemnt''')
     parser.add_argument('-l', '--label', type=str,
-                        default='node-role.kubernetes.io/spot-worker')
-    parser.add_argument('-i', '--scrape-interval', type=int, default=10)
-    parser.add_argument('-p', '--prom-port', type=int, default=8000)
-    parser.add_argument('-r', '--region', type=str, default='us-east-1')
+                        default='node-role.kubernetes.io/spot-worker',
+                        help='''Specifies the label applied to all spot
+                        instances in the cluster to identify these from other
+                        types of instances''')
+    parser.add_argument('-i', '--scrape-interval', type=int, default=10,
+                        help='''How often should the prices be scraped
+                        from AWS''')
+    parser.add_argument('-p', '--prom-port', type=int, default=8000,
+                        help='''Port to expose prometheus metrics on''')
+    parser.add_argument('-r', '--region', type=str, default='us-east-1',
+                        help='''The region that the cluster is running
+                        in''')
 
     return parser.parse_args()
 
