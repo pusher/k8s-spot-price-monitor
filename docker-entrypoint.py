@@ -56,7 +56,7 @@ def get_args():
                         help='''Specifies the label applied to all spot
                         instances in the cluster to identify these from other
                         types of instances''')
-    parser.add_argument('-i', '--scrape-interval', type=int, default=10,
+    parser.add_argument('-i', '--scrape-interval', type=int, default=60,
                         help='''How often should the prices be scraped
                         from AWS''')
     parser.add_argument('-p', '--prom-port', type=int, default=8000,
