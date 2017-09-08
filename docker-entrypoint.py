@@ -1,7 +1,8 @@
 import argparse
 from kubernetes import client, config
 import boto3
-from prometheus_client import start_http_server, Gauge
+from botocore.exceptions import ClientError
+from prometheus_client import start_http_server, Gauge, Counter
 from datetime import datetime
 from time import sleep
 
@@ -96,9 +97,20 @@ if __name__ == '__main__':
               'Reports the AWS spot price of node types used in the cluster',
               ['instance_type', 'availability_zone']
               )
+    error = Counter('aws_spot_price_request_errors',
+                    'Reports errors while calling the AWS api.',
+                    ['code']
+                    )
 
+    backoff_multiplier = 1
     while(True):
         types, zones = get_labels_from_k8s(v1, args)
-        spot_prices = get_spot_prices(ec2, types, zones)
+        try:
+            spot_prices = get_spot_prices(ec2, types, zones)
+            backoff_multiplier = 1
+        except ClientError as e:
+            error.label(code=e.response['Error']['Code']).inc()
+            if e.response['Error']['Code'] == 'RequestLimitExceeded':
+                backoff_multiplier *= 2
         update_spot_price_metrics(s, spot_prices)
-        sleep(args.scrape_interval)
+        sleep(args.scrape_interval * backoff_multiplier)
