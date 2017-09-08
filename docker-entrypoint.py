@@ -52,6 +52,7 @@ def get_args():
                         default='node-role.kubernetes.io/spot-worker')
     parser.add_argument('-i', '--scrape-interval', type=int, default=10)
     parser.add_argument('-p', '--prom-port', type=int, default=8000)
+    parser.add_argument('-r', '--region', type=str, default='us-east-1')
 
     return parser.parse_args()
 
@@ -74,7 +75,7 @@ if __name__ == '__main__':
         config.load_kube_config()
 
     v1 = client.CoreV1Api()
-    ec2 = boto3.client('ec2')
+    ec2 = boto3.client('ec2', args.region)
     start_http_server(8000)
 
     s = Gauge('aws_spot_price',
