@@ -51,7 +51,7 @@ def get_args():
     parser.add_argument('-l', '--label', type=str,
                         default='node-role.kubernetes.io/spot-worker')
     parser.add_argument('-i', '--scrape-interval', type=int, default=10)
-    parser.add_argument('-p', '--prom_port', type=int, default=8000)
+    parser.add_argument('-p', '--prom-port', type=int, default=8000)
 
     return parser.parse_args()
 
