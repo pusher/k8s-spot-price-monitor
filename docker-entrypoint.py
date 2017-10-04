@@ -24,11 +24,24 @@ def get_instance_types_from_aws(client, cluster):
     used in the cluster'''
 
     instance_types = set([])
+    launch_configuration_names = []
+    asg_cluster = None
 
-    launch_configs = client.describe_launch_configurations()
+    auto_scaling_groups = client.describe_auto_scaling_groups()
+    for auto_scaling_group in auto_scaling_groups['AutoScalingGroups']:
+        for tag in auto_scaling_group['Tags']:
+            if tag['Key'] == 'KubernetesCluster':
+                asg_cluster = tag['Value']
+        if asg_cluster == cluster:
+            launch_configuration_names.append(
+                auto_scaling_group['LaunchConfigurationName']
+            )
+
+    launch_configs = client.describe_launch_configurations(
+        LaunchConfigurationNames=launch_configuration_names
+    )
     for launch_config in launch_configs['LaunchConfigurations']:
-        if (cluster in launch_config['LaunchConfigurationName'] and
-                'SpotPrice' in launch_config):
+        if 'SpotPrice' in launch_config:
             instance_types.add(
                 launch_config['InstanceType']
                 )
