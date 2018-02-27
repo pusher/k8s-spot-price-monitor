@@ -94,7 +94,7 @@ if __name__ == '__main__':
 
     v1 = client.CoreV1Api()
     ec2 = boto3.client('ec2', args.region)
-    start_http_server(8000)
+    start_http_server(args.metrics_port)
 
     s = Gauge('aws_spot_price_dollars_per_hour',
               'Reports the AWS spot price of node types used in the cluster',
