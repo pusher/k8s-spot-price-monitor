@@ -10,8 +10,8 @@
 
 ## Introduction
 
-Reads instance types and availability zones from Kubernetes labels to expose
-prometheus metrics the current spot prices of spot instances within a cluster.
+Reads instance types and availability zones from Kubernetes labels to expose as
+Prometheus metrics, the current spot prices of spot instances within a cluster.
 
 ## Usage
 
@@ -30,22 +30,19 @@ you will need an identifying label on your spot instances.
 
 We add a label `node-role.kubernetes.io/spot-worker` to our spot instances and
 hence this is the default for the `spot-label` flag.
-```yaml
-nodeSelector:
-  "node-role.kubernetes.io/spot-worker": "true"
-```
+
 To achieve this, add the following flag to your Kubelet:
 ```
 --node-labels="node-role.kubernetes.io/spot-worker=true"
 ```
 
-Since the script uses a built in well known label for looking up `instance-types`,
-this project supports K8s v1.7+
+Since the script uses a built-in, well-known label for looking up instance types
+(`beta.kubernetes.io/instance-type`), this project supports K8s v1.7+.
 
 ### Flags
 ```
 usage: docker-entrypoint.py [-h] [--running-in-cluster RUNNING_IN_CLUSTER]
-                            [-l LABEL] [-i SCRAPE_INTERVAL] [-p PROM_PORT]
+                            [-l LABEL] [-i SCRAPE_INTERVAL] [-m METRICS_PORT]
                             [-r REGION]
 
 Monitors kubernetes for spot instances and exposes the current spot prices as
@@ -65,7 +62,7 @@ optional arguments:
   -i SCRAPE_INTERVAL, --scrape-interval SCRAPE_INTERVAL
                         How often (in seconds) should the prices be scraped
                         from AWS (Default: 60)
-  -p PROM_PORT, --prom-port PROM_PORT
+  -m METRICS_PORT, --metrics-port METRICS_PORT
                         Port to expose prometheus metrics on (Default: 8000)
   -r REGION, --region REGION
                         The region that the cluster is running in (Default:

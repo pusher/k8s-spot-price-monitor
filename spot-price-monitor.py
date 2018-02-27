@@ -65,7 +65,7 @@ def get_args():
     parser.add_argument('-i', '--scrape-interval', type=int, default=60,
                         help='''How often (in seconds) should the prices be
                         scraped from AWS (Default: 60)''')
-    parser.add_argument('-p', '--prom-port', type=int, default=8000,
+    parser.add_argument('-m', '--metrics-port', type=int, default=8000,
                         help='''Port to expose prometheus metrics on (Default:
                         8000)''')
     parser.add_argument('-r', '--region', type=str, default='us-east-1',
