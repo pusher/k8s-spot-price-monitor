@@ -28,9 +28,7 @@ spec:
             requests:
               cpu: 10m
               memory: 50Mi
-          command:
-            - python
-            - docker-entrypoint.py
+          args:
             - --running-in-cluster=True
             - --scrape-interval=60
             - --prom-port=8000
