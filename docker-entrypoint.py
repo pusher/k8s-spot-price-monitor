@@ -8,8 +8,7 @@ from time import sleep
 
 
 def get_zones_from_k8s(client):
-    ''' Returns a list of unique instance types and unique availability zones
-    used in the cluster'''
+    ''' Returns a list of unique availability zones used in the cluster'''
     nodes = client.list_node(watch=False)
     availability_zones = set([])
     for node in nodes.items:
@@ -19,31 +18,14 @@ def get_zones_from_k8s(client):
     return list(availability_zones)
 
 
-def get_instance_types_from_aws(client, cluster):
-    '''Returns a list of unique instance types and unique availability zones
-    used in the cluster'''
-
+def get_instance_types_from_k8s(client, label):
+    ''' Returns a list of unique instance types used in the cluster'''
+    nodes = client.list_node(watch=False)
     instance_types = set([])
-    launch_configuration_names = []
-    asg_cluster = None
-
-    auto_scaling_groups = client.describe_auto_scaling_groups()
-    for auto_scaling_group in auto_scaling_groups['AutoScalingGroups']:
-        for tag in auto_scaling_group['Tags']:
-            if tag['Key'] == 'KubernetesCluster':
-                asg_cluster = tag['Value']
-        if asg_cluster == cluster:
-            launch_configuration_names.append(
-                auto_scaling_group['LaunchConfigurationName']
-            )
-
-    launch_configs = client.describe_launch_configurations(
-        LaunchConfigurationNames=launch_configuration_names
-    )
-    for launch_config in launch_configs['LaunchConfigurations']:
-        if 'SpotPrice' in launch_config:
+    for node in nodes.items:
+        if label in node.metadata.labels:
             instance_types.add(
-                launch_config['InstanceType']
+                node.metadata.labels['beta.kubernetes.io/instance-type']
                 )
     return list(instance_types)
 
@@ -76,9 +58,10 @@ def get_args():
                         environment if running within the cluster, else loads a
                         kubeconfig from the running environemnt (Default:
                         False)''')
-    parser.add_argument('-c', '--cluster', type=str, required=True,
-                        help='''Specifies the cluster name from which we should
-                        look for instance types.''')
+    parser.add_argument('-l', '--spot-label', type=str, required=False,
+                        help='''Specifies the label that identifies nodes as
+                        spot instances.''',
+                        default='node-role.kubernetes.io/spot-worker')
     parser.add_argument('-i', '--scrape-interval', type=int, default=60,
                         help='''How often (in seconds) should the prices be
                         scraped from AWS (Default: 60)''')
@@ -111,7 +94,6 @@ if __name__ == '__main__':
 
     v1 = client.CoreV1Api()
     ec2 = boto3.client('ec2', args.region)
-    auto_scaling = boto3.client('autoscaling', args.region)
     start_http_server(8000)
 
     s = Gauge('aws_spot_price_dollars_per_hour',
@@ -127,7 +109,7 @@ if __name__ == '__main__':
     while(True):
         zones = get_zones_from_k8s(v1)
         try:
-            types = get_instance_types_from_aws(auto_scaling, args.cluster)
+            types = get_instance_types_from_k8s(v1, args.spot_label)
             spot_prices = get_spot_prices(ec2, types, zones)
             backoff_multiplier = 1
         except ClientError as e:
