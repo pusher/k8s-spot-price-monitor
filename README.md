@@ -17,7 +17,7 @@ Prometheus metrics, the current spot prices of spot instances within a cluster.
 
 ### Deploy to Kubernetes
 A docker image is available at `quay.io/pusher/k8s-spot-price-monitor`.
-These images are currently built on pushes to master. Releases will be tagged as and when releases are made.
+These images are currently built on pushes to master. Releases will be tagged.
 
 Sample Kubernetes manifests are available in the [deploy](deploy/) folder.
 
