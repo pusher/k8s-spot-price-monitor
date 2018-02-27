@@ -41,7 +41,7 @@ Since the script uses a built-in, well-known label for looking up instance types
 
 ### Flags
 ```
-usage: docker-entrypoint.py [-h] [--running-in-cluster RUNNING_IN_CLUSTER]
+usage: spot-price-monitor.py [-h] [--running-in-cluster RUNNING_IN_CLUSTER]
                             [-l LABEL] [-i SCRAPE_INTERVAL] [-m METRICS_PORT]
                             [-r REGION]
 
