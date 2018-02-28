@@ -4,7 +4,7 @@ build:
     - pip-install
     - script:
         name: Copy entrypoint
-        code: cp docker-entrypoint.py /
+        code: cp spot-price-monitor.py /
     - internal/docker-push:
         aws-access-key: $AWS_ACCESS_KEY_ID
         aws-secret-key: $AWS_SECRET_ACCESS_KEY
@@ -13,4 +13,4 @@ build:
         repository: pusher/spot-price-monitor
         tag: $WERCKER_GIT_COMMIT, $WERCKER_GIT_BRANCH, latest
         entrypoint: python
-        cmd: -u /docker-entrypoint.py
+        cmd: -u /spot-price-monitor.py

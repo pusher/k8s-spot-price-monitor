@@ -65,7 +65,7 @@ def get_args():
     parser.add_argument('-i', '--scrape-interval', type=int, default=60,
                         help='''How often (in seconds) should the prices be
                         scraped from AWS (Default: 60)''')
-    parser.add_argument('-p', '--prom-port', type=int, default=8000,
+    parser.add_argument('-m', '--metrics-port', type=int, default=8000,
                         help='''Port to expose prometheus metrics on (Default:
                         8000)''')
     parser.add_argument('-r', '--region', type=str, default='us-east-1',
@@ -94,7 +94,7 @@ if __name__ == '__main__':
 
     v1 = client.CoreV1Api()
     ec2 = boto3.client('ec2', args.region)
-    start_http_server(8000)
+    start_http_server(args.metrics_port)
 
     s = Gauge('aws_spot_price_dollars_per_hour',
               'Reports the AWS spot price of node types used in the cluster',

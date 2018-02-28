@@ -1,0 +1,37 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: k8s-spot-price-monitor
+  namespace: kube-system
+  labels:
+    app: k8s-spot-price-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-spot-price-monitor
+  template:
+    metadata:
+      labels:
+        app: k8s-spot-price-monitor
+    spec:
+      # Uncomment the following line if using RBAC
+      # serviceAccountName: k8s-spot-price-monitor
+      containers:
+        - image: quay.io/pusher/k8s-spot-price-monitor:v0.1.0
+          name: k8s-spot-price-monitor
+          resources:
+            limits:
+              cpu: 20m
+              memory: 100Mi
+            requests:
+              cpu: 10m
+              memory: 50Mi
+          args:
+            - --running-in-cluster=True
+            - --scrape-interval=60
+            - --metrics-port=8000
+          ports:
+          - name: http
+            containerPort: 8000
