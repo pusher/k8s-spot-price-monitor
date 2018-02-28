@@ -39,6 +39,25 @@ To achieve this, add the following flag to your Kubelet:
 Since the script uses a built-in, well-known label for looking up instance types
 (`beta.kubernetes.io/instance-type`), this project supports K8s v1.7+.
 
+##### IAM
+To fetch Spot Prices, the Spot Price Monitor will need the following IAM role policy.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Stmt1519813867626",
+      "Action": [
+        "ec2:DescribeSpotPriceHistory"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
 ### Flags
 ```
 usage: spot-price-monitor.py [-h] [--running-in-cluster RUNNING_IN_CLUSTER]
