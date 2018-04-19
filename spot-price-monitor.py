@@ -41,7 +41,7 @@ def get_spot_prices(client, instance_types, availability_zones):
         ],
         InstanceTypes=instance_types,
         StartTime=datetime.now(),
-        ProductDescriptions=['Linux/UNIX']
+        ProductDescriptions=['Linux/UNIX', 'Linux/UNIX (Amazon VPC)']
     )
     return response['SpotPriceHistory']
 
