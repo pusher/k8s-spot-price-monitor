@@ -58,11 +58,24 @@ To fetch Spot Prices, the Spot Price Monitor will need the following IAM role po
 }
 ```
 
+### Product descriptions
+For EC2 Classic accounts the default `Linux/UNIX` product description will only
+work for non-VPC instance types, and for VPC accounts it will only work for VPC
+instance types.
+
+It's possible to override the product descriptions with the `-p`/`--products`
+flag to work around this:
+
+```
+spot-price-monitor.py --products "Linux/UNIX" "Linux/UNIX (Amazon VPC)"
+```
+
 ### Flags
 ```
 usage: spot-price-monitor.py [-h] [--running-in-cluster RUNNING_IN_CLUSTER]
-                            [-l LABEL] [-i SCRAPE_INTERVAL] [-m METRICS_PORT]
-                            [-r REGION]
+                             [-l SPOT_LABEL] [-i SCRAPE_INTERVAL]
+                             [-m METRICS_PORT] [-r REGION]
+                             [-p PRODUCTS [PRODUCTS ...]]
 
 Monitors kubernetes for spot instances and exposes the current spot prices as
 prometheus metrics
@@ -86,6 +99,9 @@ optional arguments:
   -r REGION, --region REGION
                         The region that the cluster is running in (Default:
                         us-east-1)
+  -p PRODUCTS [PRODUCTS ...], --products PRODUCTS [PRODUCTS ...]
+                        List of product (descriptions) to use for filtering
+                        (Default: Linux/UNIX)
 ```
 
 ## Related
