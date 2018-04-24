@@ -7,6 +7,15 @@ from datetime import datetime
 from time import sleep
 
 
+ALLOWED_PRODUCTS = [
+        'Linux/UNIX',
+        'SUSE Linux',
+        'Windows',
+        'Linux/UNIX (Amazon VPC)',
+        'SUSE Linux (Amazon VPC)',
+        'Windows (Amazon VPC)'
+        ]
+
 def get_zones_from_k8s(client):
     ''' Returns a list of unique availability zones used in the cluster'''
     nodes = client.list_node(watch=False)
@@ -90,6 +99,10 @@ def update_spot_price_metrics(metric, prices):
 
 if __name__ == '__main__':
     args = get_args()
+
+    for p in args.products:
+        if p not in ALLOWED_PRODUCTS:
+            raise ValueError('invalid product {}, expected one of {}'.format(p, ALLOWED_PRODUCTS))
 
     if args.running_in_cluster:
         config.incluster_config.load_incluster_config()
