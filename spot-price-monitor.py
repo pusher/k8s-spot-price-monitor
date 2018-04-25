@@ -1,10 +1,14 @@
 import argparse
 from kubernetes import client, config
 import boto3
+import requests
+import re
+import json
 from botocore.exceptions import ClientError
 from prometheus_client import start_http_server, Gauge, Counter
 from datetime import datetime
-from time import sleep
+import time
+import logging
 
 
 ALLOWED_PRODUCTS = [
@@ -54,6 +58,37 @@ def get_spot_prices(client, instance_types, availability_zones, products):
     )
     return response['SpotPriceHistory']
 
+def get_ondemand_price_metrics(num_of_retries=5, time_interval=2, timeout=5):
+
+    for _ in range(num_of_retries):
+        try:
+            logging.debug("Downloading daily ondemand prices")
+            response = requests.get('https://raw.githubusercontent.com/powdahound/ec2instances.info/master/www/instances.json', timeout=timeout)
+
+            if response.status_code != 200:
+                logging.error("Failed to download ondemand prices. Status code for page %d" % response.status_code)
+                raise Exception("Failed to download ondemand prices")
+
+            break
+        except Exception as e:
+            logging.error("Failed to download ondemand prices. Exception: %s. Retrying..." % e.message)
+            time.sleep(time_interval)
+    else:
+        logging.error("Maximum retries hit")
+        raise Exception("Failed to get ondemand prices after %d tries.", )
+
+    parsed_json = json.loads(response.text)
+    on_demand_prices = {}
+    for instance_type in parsed_json:
+        for region in instance_type['pricing']:
+            if region not in on_demand_prices:
+                on_demand_prices[region] = {}
+            if 'linux' in instance_type['pricing'][region] and 'ondemand' in instance_type['pricing'][region]['linux']:
+                on_demand_prices[region][instance_type['instance_type']] = instance_type['pricing'][region]['linux']['ondemand']
+
+    logging.debug("Ondemand prices:\n %s" % on_demand_prices)
+
+    return on_demand_prices
 
 def get_args():
     ''' Processes command line arguments'''
@@ -80,6 +115,10 @@ def get_args():
     parser.add_argument('-r', '--region', type=str, default='us-east-1',
                         help='''The region that the cluster is running
                         in (Default: us-east-1)''')
+    parser.add_argument('-o', '--ondemand', action="store_true", default=False,
+                        help='''Will enable ondemand prices''')
+    parser.add_argument('-v', '--verbose', action="store_true", default=False,
+                        help='''Enable verbose output''')
     parser.add_argument('-p', '--products', type=str, nargs='+', default=['Linux/UNIX'],
                         help='''List of product (descriptions) to use for filtering, separated
                         by spaces, e.g. `-p "Linux/UNIX" "Linux/UNIX (Amazon VPC)"`
@@ -96,10 +135,24 @@ def update_spot_price_metrics(metric, prices):
             availability_zone=price['AvailabilityZone']
             ).set(price['SpotPrice'])
 
+def update_ondemand_price_metrics(metric, prices, types, zones):
+    for zone in zones:
+        region = re.sub(r"[a-z]$", "", zone)
+        for instance_type in types:
+            metric.labels(
+                instance_type=instance_type,
+                availability_zone=zone
+            ).set(prices[region][instance_type])
 
 if __name__ == '__main__':
     args = get_args()
 
+    if args.verbose:
+        logging_level=logging.DEBUG
+    else:
+        logging_level=logging.WARN
+    
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging_level)
     for p in args.products:
         if p not in ALLOWED_PRODUCTS:
             raise ValueError('invalid product {}, expected one of {}'.format(p, ALLOWED_PRODUCTS))
@@ -112,16 +165,24 @@ if __name__ == '__main__':
     v1 = client.CoreV1Api()
     ec2 = boto3.client('ec2', args.region)
     start_http_server(args.metrics_port)
+    o = None
 
     s = Gauge('aws_spot_price_dollars_per_hour',
               'Reports the AWS spot price of node types used in the cluster',
               ['instance_type', 'availability_zone']
               )
+    if args.ondemand:
+        o = Gauge('aws_on_demand_dollars_per_hour',
+                  'Reports the AWS ondemand of node types used in the cluster',
+                  ['instance_type', 'availability_zone']
+                 )
+
     error = Counter('aws_spot_price_request_errors',
                     'Reports errors while calling the AWS api.',
                     ['code']
                     )
 
+    last_ondemand_update = 0
     backoff_multiplier = 1
     while(True):
         zones = get_zones_from_k8s(v1)
@@ -130,8 +191,19 @@ if __name__ == '__main__':
             spot_prices = get_spot_prices(ec2, types, zones, args.products)
             backoff_multiplier = 1
         except ClientError as e:
-            error.label(code=e.response['Error']['Code']).inc()
+            error.labels(code=e.response['Error']['Code']).inc()
             if e.response['Error']['Code'] == 'RequestLimitExceeded':
                 backoff_multiplier *= 2
         update_spot_price_metrics(s, spot_prices)
-        sleep(args.scrape_interval * backoff_multiplier)
+
+        # refresh ondemand prices each hour
+        if args.ondemand and last_ondemand_update+86400<time.time():
+            try:
+                last_ondemand_update = time.time()
+                ondemand_prices=get_ondemand_price_metrics()
+                update_ondemand_price_metrics(o, ondemand_prices, types, zones)
+            except Exception as e:
+                logging.error("Ondemand prices load failed. I won't retry for another day. Error: %s" % e.message)
+                error.labels(code='ondemand_failure').inc()
+
+        time.sleep(args.scrape_interval * backoff_multiplier)
