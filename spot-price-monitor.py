@@ -7,6 +7,15 @@ from datetime import datetime
 from time import sleep
 
 
+ALLOWED_PRODUCTS = [
+        'Linux/UNIX',
+        'SUSE Linux',
+        'Windows',
+        'Linux/UNIX (Amazon VPC)',
+        'SUSE Linux (Amazon VPC)',
+        'Windows (Amazon VPC)'
+        ]
+
 def get_zones_from_k8s(client):
     ''' Returns a list of unique availability zones used in the cluster'''
     nodes = client.list_node(watch=False)
@@ -30,7 +39,7 @@ def get_instance_types_from_k8s(client, label):
     return list(instance_types)
 
 
-def get_spot_prices(client, instance_types, availability_zones):
+def get_spot_prices(client, instance_types, availability_zones, products):
     ''' Returns a list of spot prices by instance type and availability zone'''
     response = client.describe_spot_price_history(
         Filters=[
@@ -41,7 +50,7 @@ def get_spot_prices(client, instance_types, availability_zones):
         ],
         InstanceTypes=instance_types,
         StartTime=datetime.now(),
-        ProductDescriptions=['Linux/UNIX']
+        ProductDescriptions=products
     )
     return response['SpotPriceHistory']
 
@@ -71,6 +80,10 @@ def get_args():
     parser.add_argument('-r', '--region', type=str, default='us-east-1',
                         help='''The region that the cluster is running
                         in (Default: us-east-1)''')
+    parser.add_argument('-p', '--products', type=str, nargs='+', default=['Linux/UNIX'],
+                        help='''List of product (descriptions) to use for filtering, separated
+                        by spaces, e.g. `-p "Linux/UNIX" "Linux/UNIX (Amazon VPC)"`
+                        (Default: Linux/UNIX)''')
 
     return parser.parse_args()
 
@@ -86,6 +99,10 @@ def update_spot_price_metrics(metric, prices):
 
 if __name__ == '__main__':
     args = get_args()
+
+    for p in args.products:
+        if p not in ALLOWED_PRODUCTS:
+            raise ValueError('invalid product {}, expected one of {}'.format(p, ALLOWED_PRODUCTS))
 
     if args.running_in_cluster:
         config.incluster_config.load_incluster_config()
@@ -110,7 +127,7 @@ if __name__ == '__main__':
         zones = get_zones_from_k8s(v1)
         try:
             types = get_instance_types_from_k8s(v1, args.spot_label)
-            spot_prices = get_spot_prices(ec2, types, zones)
+            spot_prices = get_spot_prices(ec2, types, zones, args.products)
             backoff_multiplier = 1
         except ClientError as e:
             error.label(code=e.response['Error']['Code']).inc()
