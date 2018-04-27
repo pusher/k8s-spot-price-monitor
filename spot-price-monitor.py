@@ -200,8 +200,13 @@ if __name__ == '__main__':
         if args.ondemand and last_ondemand_update+86400<time.time():
             try:
                 last_ondemand_update = time.time()
+                price_zones = {}
+                price_instance_types = {}
+                for price in spot_prices:
+                    price_zones[price['AvailabilityZone']]=1
+                    price_instance_types[price['InstanceType']]=1
                 ondemand_prices=get_ondemand_price_metrics()
-                update_ondemand_price_metrics(o, ondemand_prices, types, zones)
+                update_ondemand_price_metrics(o, ondemand_prices, price_instance_types.keys(), price_zones.keys())
             except Exception as e:
                 logging.error("Ondemand prices load failed. I won't retry for another day. Error: %s" % e.message)
                 error.labels(code='ondemand_failure').inc()
