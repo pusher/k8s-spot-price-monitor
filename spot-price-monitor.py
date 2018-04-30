@@ -115,7 +115,7 @@ def get_args():
     parser.add_argument('-r', '--region', type=str, default='us-east-1',
                         help='''The region that the cluster is running
                         in (Default: us-east-1)''')
-    parser.add_argument('-o', '--ondemand', action="store_true", default=False,
+    parser.add_argument('--ondemand', action="store_true", default=False,
                         help='''Will enable ondemand prices''')
     parser.add_argument('-v', '--verbose', action="store_true", default=False,
                         help='''Enable verbose output''')
@@ -184,6 +184,7 @@ if __name__ == '__main__':
 
     last_ondemand_update = 0
     backoff_multiplier = 1
+    spot_prices = []
     while(True):
         zones = get_zones_from_k8s(v1)
         try:
