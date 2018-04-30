@@ -197,7 +197,7 @@ if __name__ == '__main__':
                 backoff_multiplier *= 2
         update_spot_price_metrics(s, spot_prices)
 
-        # refresh ondemand prices each hour
+        # refresh ondemand prices each day
         if args.ondemand and last_ondemand_update+86400<time.time():
             try:
                 last_ondemand_update = time.time()
