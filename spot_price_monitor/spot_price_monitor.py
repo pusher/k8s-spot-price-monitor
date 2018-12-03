@@ -1,14 +1,19 @@
-import argparse
-from kubernetes import client, config
-import boto3
-import requests
+#!/usr/bin/python
+'''Exposes Prometheus metrics for current spot prices.'''
+
 import re
-import json
-from botocore.exceptions import ClientError
-from prometheus_client import start_http_server, Gauge, Counter
-from datetime import datetime
 import time
+import json
+import argparse
+import requests
 import logging
+from datetime import datetime
+
+import boto3
+from botocore.exceptions import ClientError
+from kubernetes import client, config
+from prometheus_client import start_http_server, Gauge, Counter
+
 log = logging.getLogger(__name__)
 
 ALLOWED_PRODUCTS = [
@@ -20,9 +25,10 @@ ALLOWED_PRODUCTS = [
         'Windows (Amazon VPC)'
         ]
 
-def get_zones_from_k8s(client):
+
+def get_zones_from_k8s(k8s_client):
     ''' Returns a list of unique availability zones used in the cluster'''
-    nodes = client.list_node(watch=False)
+    nodes = k8s_client.list_node(watch=False)
     availability_zones = set([])
     for node in nodes.items:
         availability_zones.add(
@@ -31,9 +37,9 @@ def get_zones_from_k8s(client):
     return list(availability_zones)
 
 
-def get_instance_types_from_k8s(client, label):
+def get_instance_types_from_k8s(k8s_client, label):
     ''' Returns a list of unique instance types used in the cluster'''
-    nodes = client.list_node(watch=False)
+    nodes = k8s_client.list_node(watch=False)
     instance_types = set([])
     for node in nodes.items:
         if label in node.metadata.labels:
@@ -43,9 +49,9 @@ def get_instance_types_from_k8s(client, label):
     return list(instance_types)
 
 
-def get_spot_prices(client, instance_types, availability_zones, products):
+def get_spot_prices(k8s_client, instance_types, availability_zones, products):
     ''' Returns a list of spot prices by instance type and availability zone'''
-    response = client.describe_spot_price_history(
+    response = k8s_client.describe_spot_price_history(
         Filters=[
             {
                 'Name': 'availability-zone',
@@ -144,61 +150,61 @@ def update_ondemand_price_metrics(metric, prices, types, zones):
                 availability_zone=zone
             ).set(prices[region][instance_type])
 
-if __name__ == '__main__':
+def main():
+    ''' Main '''
     args = get_args()
 
-    if args.verbose:
-        logging_level=log.DEBUG
-    else:
-        logging_level=log.WARN
+    logging_level = logging.DEBUG if args.verbose else logging.WARN
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging_level)
 
-    log.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging_level)
-    for p in args.products:
-        if p not in ALLOWED_PRODUCTS:
-            raise ValueError('invalid product {}, expected one of {}'.format(p, ALLOWED_PRODUCTS))
+    for product in args.products:
+        if product not in ALLOWED_PRODUCTS:
+            raise ValueError('invalid product {}, expected one of {}'.format(product, ALLOWED_PRODUCTS))
 
     if args.running_in_cluster:
         config.incluster_config.load_incluster_config()
     else:
         config.load_kube_config()
 
-    v1 = client.CoreV1Api()
+    k8s_api = client.CoreV1Api()
     ec2 = boto3.client('ec2', args.region)
     start_http_server(args.metrics_port)
     o = None
 
-    s = Gauge('aws_spot_price_dollars_per_hour',
-              'Reports the AWS spot price of node types used in the cluster',
-              ['instance_type', 'availability_zone']
-              )
-    if args.ondemand:
-        o = Gauge('aws_on_demand_dollars_per_hour',
-                  'Reports the AWS ondemand of node types used in the cluster',
-                  ['instance_type', 'availability_zone']
-                 )
-
-    error = Counter('aws_spot_price_request_errors',
-                    'Reports errors while calling the AWS api.',
-                    ['code']
-                    )
+    spot_gauge = Gauge('aws_spot_price_dollars_per_hour',
+                       'Reports the AWS spot price of node types used in the cluster',
+                       ['instance_type', 'availability_zone']
+                       )
+    spot_error = Counter('aws_spot_price_request_errors',
+                         'Reports errors while calling the AWS api.',
+                         ['code']
+                         )
+    if args.on_demand:
+        on_demand_spot_gauge = Gauge('aws_on_demand_dollars_per_hour',
+                                     'Reports the AWS ondemand of node types used in the cluster',
+                                     ['instance_type', 'availability_zone']
+                                     )
 
     last_ondemand_update = 0
     backoff_multiplier = 1
+
     spot_prices = []
-    while(True):
-        zones = get_zones_from_k8s(v1)
+    while True:
+        zones = get_zones_from_k8s(k8s_api)
         try:
-            types = get_instance_types_from_k8s(v1, args.spot_label)
+            types = get_instance_types_from_k8s(k8s_api, args.spot_label)
             spot_prices = get_spot_prices(ec2, types, zones, args.products)
             backoff_multiplier = 1
-        except ClientError as e:
-            error.labels(code=e.response['Error']['Code']).inc()
-            if e.response['Error']['Code'] == 'RequestLimitExceeded':
+
+        except ClientError as exception:
+            spot_error.labels(code=e.response['Error']['Code']).inc()
+
+            if exception.response['Error']['Code'] == 'RequestLimitExceeded':
                 backoff_multiplier *= 2
-        update_spot_price_metrics(s, spot_prices)
+        update_spot_price_metrics(spot_gauge, spot_prices)
 
         # refresh ondemand prices each day
-        if args.ondemand and last_ondemand_update+86400<time.time():
+        if args.on_demand and last_ondemand_update+86400<time.time():
             try:
                 last_ondemand_update = time.time()
                 price_zones = {}
@@ -213,3 +219,6 @@ if __name__ == '__main__':
                 error.labels(code='ondemand_failure').inc()
 
         time.sleep(args.scrape_interval * backoff_multiplier)
+
+if __name__ == '__main__':
+    main()
