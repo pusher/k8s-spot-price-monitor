@@ -9,7 +9,7 @@ from prometheus_client import start_http_server, Gauge, Counter
 from datetime import datetime
 import time
 import logging
-
+log = logging.getLogger(__name__)
 
 ALLOWED_PRODUCTS = [
         'Linux/UNIX',
@@ -62,19 +62,19 @@ def get_ondemand_price_metrics(num_of_retries=5, time_interval=2, timeout=5):
 
     for _ in range(num_of_retries):
         try:
-            logging.debug("Downloading daily ondemand prices")
+            log.debug("Downloading daily ondemand prices")
             response = requests.get('https://raw.githubusercontent.com/powdahound/ec2instances.info/master/www/instances.json', timeout=timeout)
 
             if response.status_code != 200:
-                logging.error("Failed to download ondemand prices. Status code for page %d" % response.status_code)
+                log.error("Failed to download ondemand prices. Status code for page %d" % response.status_code)
                 raise Exception("Failed to download ondemand prices")
 
             break
         except Exception as e:
-            logging.error("Failed to download ondemand prices. Exception: %s. Retrying..." % e.message)
+            log.error("Failed to download ondemand prices. Exception: %s. Retrying..." % e.message)
             time.sleep(time_interval)
     else:
-        logging.error("Maximum retries hit")
+        log.error("Maximum retries hit")
         raise Exception("Failed to get ondemand prices after %d tries.", )
 
     parsed_json = json.loads(response.text)
@@ -86,7 +86,7 @@ def get_ondemand_price_metrics(num_of_retries=5, time_interval=2, timeout=5):
             if 'linux' in instance_type['pricing'][region] and 'ondemand' in instance_type['pricing'][region]['linux']:
                 on_demand_prices[region][instance_type['instance_type']] = instance_type['pricing'][region]['linux']['ondemand']
 
-    logging.debug("Ondemand prices:\n %s" % on_demand_prices)
+    log.debug("Ondemand prices:\n %s" % on_demand_prices)
 
     return on_demand_prices
 
@@ -115,7 +115,7 @@ def get_args():
     parser.add_argument('-r', '--region', type=str, default='us-east-1',
                         help='''The region that the cluster is running
                         in (Default: us-east-1)''')
-    parser.add_argument('--ondemand', action="store_true", default=False,
+    parser.add_argument('--on-demand', action="store_true", default=False,
                         help='''Will enable ondemand prices''')
     parser.add_argument('-v', '--verbose', action="store_true", default=False,
                         help='''Enable verbose output''')
@@ -148,11 +148,11 @@ if __name__ == '__main__':
     args = get_args()
 
     if args.verbose:
-        logging_level=logging.DEBUG
+        logging_level=log.DEBUG
     else:
-        logging_level=logging.WARN
-    
-    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging_level)
+        logging_level=log.WARN
+
+    log.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging_level)
     for p in args.products:
         if p not in ALLOWED_PRODUCTS:
             raise ValueError('invalid product {}, expected one of {}'.format(p, ALLOWED_PRODUCTS))
@@ -209,7 +209,7 @@ if __name__ == '__main__':
                 ondemand_prices=get_ondemand_price_metrics()
                 update_ondemand_price_metrics(o, ondemand_prices, price_instance_types.keys(), price_zones.keys())
             except Exception as e:
-                logging.error("Ondemand prices load failed. I won't retry for another day. Error: %s" % e.message)
+                log.error("Ondemand prices load failed. I won't retry for another day. Error: %s" % e.message)
                 error.labels(code='ondemand_failure').inc()
 
         time.sleep(args.scrape_interval * backoff_multiplier)
