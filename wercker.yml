@@ -1,4 +1,4 @@
-box: python:3-slim
+box: python:3.6-slim
 build:
   steps:
     - pip-install

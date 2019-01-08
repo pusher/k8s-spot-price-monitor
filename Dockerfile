@@ -1,4 +1,4 @@
-FROM python:2-slim
+FROM python:3.6-slim
 
 COPY spot_price_monitor/spot_price_monitor.py /
 COPY requirements.txt /
