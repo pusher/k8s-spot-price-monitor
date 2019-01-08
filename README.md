@@ -67,12 +67,12 @@ It's possible to override the product descriptions with the `-p`/`--products`
 flag to work around this:
 
 ```
-spot-price-monitor.py --products "Linux/UNIX" "Linux/UNIX (Amazon VPC)"
+spot_price_monitor.py --products "Linux/UNIX" "Linux/UNIX (Amazon VPC)"
 ```
 
 ### Flags
 ```
-usage: spot-price-monitor.py [-h] [--running-in-cluster RUNNING_IN_CLUSTER]
+usage: spot_price_monitor.py [-h] [--running-in-cluster RUNNING_IN_CLUSTER]
                              [-l SPOT_LABEL] [-i SCRAPE_INTERVAL]
                              [-m METRICS_PORT] [-r REGION]
                              [-p PRODUCTS [PRODUCTS ...]]

@@ -1,16 +1,28 @@
-box: python:3-alpine
+box: python:3-slim
 build:
   steps:
     - pip-install
     - script:
         name: Copy entrypoint
-        code: cp spot-price-monitor.py /
+        code: cp spot_price_monitor/spot_price_monitor.py /
     - internal/docker-push:
         aws-access-key: $AWS_CI_ACCESS_KEY_ID
         aws-secret-key: $AWS_CI_SECRET_ACCESS_KEY
         aws-region: us-east-1
-        aws-registry-id: $AWS_REGISTRY_ID
+        aws-registry-id: $AWS_CI_REGISTRY_ID
         repository: pusher/spot-price-monitor
         tag: $WERCKER_GIT_COMMIT, $WERCKER_GIT_BRANCH, latest
-        entrypoint: python
-        cmd: -u /spot-price-monitor.py
+        entrypoint: python3.7
+        cmd: -u /spot_price_monitor.py
+
+lint:
+  steps:
+  - pip-install
+  - script:
+      name: Run flake8
+      code: |
+       flake8 spot_price_monitor --max-line-length=130 --max-complexity=13
+  - script:
+      name: Run pylint
+      code: |
+       pylint spot_price_monitor --max-line-length=130 --disable=W0703,R0914,W0311,C0330

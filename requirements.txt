@@ -1,4 +1,6 @@
-kubernetes
-boto3
-prometheus_client
-botocore
+kubernetes==6.0.0
+boto3==1.7.7
+prometheus-client==0.2.0
+botocore==1.10.7
+flake8==3.6.0
+pylint==2.2.2

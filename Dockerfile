@@ -1,8 +1,8 @@
-FROM python:3-alpine
+FROM python:2-slim
 
-COPY spot-price-monitor.py /
+COPY spot_price_monitor/spot_price_monitor.py /
 COPY requirements.txt /
 
 RUN pip install -r /requirements.txt
 
-ENTRYPOINT ["python", "-u", "spot-price-monitor.py"]
+ENTRYPOINT ["python", "-u", "spot_price_monitor.py"]
