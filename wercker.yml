@@ -1,7 +1,12 @@
-box: python:3.6-slim
+box: python:3.6-alpine
 build:
   steps:
-    - pip-install
+    - script:
+        name: Install dependencies
+        code: |
+          apk add --no-cache --virtual build-dependencies gcc musl-dev && \
+          pip install --no-cache-dir -r requirements.txt && \
+          apk del build-dependencies
     - script:
         name: Copy entrypoint
         code: cp spot_price_monitor/spot_price_monitor.py /
@@ -12,17 +17,25 @@ build:
         aws-registry-id: $AWS_CI_REGISTRY_ID
         repository: pusher/spot-price-monitor
         tag: $WERCKER_GIT_COMMIT, $WERCKER_GIT_BRANCH, latest
-        entrypoint: python3.7
+        entrypoint: python3
         cmd: -u /spot_price_monitor.py
 
 lint:
   steps:
-  - pip-install
-  - script:
-      name: Run flake8
-      code: |
-       flake8 spot_price_monitor --max-line-length=130 --max-complexity=13
-  - script:
-      name: Run pylint
-      code: |
-       pylint spot_price_monitor --max-line-length=130 --disable=W0703,R0914,W0311,C0330
+    - script:
+        name: Install dependencies
+        code: |
+          apk add --no-cache --virtual build-dependencies gcc musl-dev && \
+          pip install --no-cache-dir -r requirements.txt && \
+          apk del build-dependencies
+    - script:
+        name: Copy entrypoint
+        code: cp spot_price_monitor/spot_price_monitor.py /
+    - script:
+        name: Run flake8
+        code: |
+         flake8 spot_price_monitor --max-line-length=130 --max-complexity=13
+    - script:
+        name: Run pylint
+        code: |
+         pylint spot_price_monitor --max-line-length=130 --disable=W0703,R0914,W0311,C0330
