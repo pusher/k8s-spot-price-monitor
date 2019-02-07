@@ -52,10 +52,10 @@ def get_instance_types_from_k8s(k8s_client, label):
     return list(instance_types)
 
 
-def get_spot_prices(k8s_client, instance_types, availability_zones, products):
+def get_spot_prices(boto_client, instance_types, availability_zones, products):
     '''Returns a list of spot prices by instance type and availability zone'''
 
-    response = k8s_client.describe_spot_price_history(
+    response = boto_client.describe_spot_price_history(
         Filters=[
             {
                 'Name': 'availability-zone',
