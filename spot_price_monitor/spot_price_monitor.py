@@ -72,6 +72,24 @@ def get_spot_prices(ec2_client, instance_types, availability_zones, products):
 def get_ondemand_price_metrics(num_of_retries=5, time_interval=2, timeout=5):
     '''Returns a dict of on-demand spot prices'''
 
+    response = get_ondemand_prices_from_api(num_of_retries, time_interval, timeout)
+    parsed_json = json.loads(response.text)
+    on_demand_prices = {}
+    for instance_type in parsed_json:
+        for region in instance_type['pricing']:
+            if region not in on_demand_prices:
+                on_demand_prices[region] = {}
+            if 'linux' in instance_type['pricing'][region] and 'ondemand' in instance_type['pricing'][region]['linux']:
+                price = instance_type['pricing'][region]['linux']['ondemand']
+                on_demand_prices[region][instance_type['instance_type']] = price
+
+    logger.debug("Ondemand prices:\n %s", on_demand_prices)
+
+    return on_demand_prices
+
+
+def get_ondemand_prices_from_api(num_of_retries, time_interval, timeout):
+    '''Fetches a list of ondemand prices from the EC2_PRICING_API'''
     for _ in range(num_of_retries):
         try:
             logger.debug("Downloading daily ondemand prices")
@@ -81,26 +99,14 @@ def get_ondemand_price_metrics(num_of_retries=5, time_interval=2, timeout=5):
                 logger.error("Failed to download ondemand prices. Status code for page %d", response.status_code)
                 raise Exception("Failed to download ondemand prices")
 
-            break
-        except Exception as exception:
+            return response
+        except requests.exceptions.RequestException as exception:
             logger.error("Failed to download ondemand prices. Exception: %s. Retrying...", str(exception))
             time.sleep(time_interval)
-    else:
-        logger.error("Maximum retries hit")
-        raise Exception("Failed to get ondemand prices after %d tries.", )
 
-    parsed_json = json.loads(response.text)
-    on_demand_prices = {}
-    for instance_type in parsed_json:
-        for region in instance_type['pricing']:
-            if region not in on_demand_prices:
-                on_demand_prices[region] = {}
-            if 'linux' in instance_type['pricing'][region] and 'ondemand' in instance_type['pricing'][region]['linux']:
-                on_demand_prices[region][instance_type['instance_type']] = instance_type['pricing'][region]['linux']['ondemand']
-
-    logger.debug("Ondemand prices:\n %s", on_demand_prices)
-
-    return on_demand_prices
+    # Should only get here once num_of_retries is exceeded
+    logger.error("Maximum retries hit")
+    raise Exception("Failed to get ondemand prices after %d tries.", )
 
 
 def get_args():
@@ -162,6 +168,37 @@ def update_ondemand_price_metrics(metric, prices, types, zones):
             ).set(prices[region][instance_type])
 
 
+def update_ondemand_prices(on_demand, last_ondemand_update, on_demand_spot_gauge, spot_prices, spot_error):
+    '''Refresh ondemand prices once a day'''
+    if on_demand and last_ondemand_update + 86400 < time.time():
+        try:
+            last_ondemand_update = time.time()
+            price_zones = {}
+            price_instance_types = {}
+            for price in spot_prices:
+                price_zones[price['AvailabilityZone']] = 1
+                price_instance_types[price['InstanceType']] = 1
+            ondemand_prices = get_ondemand_price_metrics()
+            update_ondemand_price_metrics(
+                on_demand_spot_gauge,
+                ondemand_prices,
+                price_instance_types.keys(), price_zones.keys())
+            return last_ondemand_update
+        except Exception as exception:  # noqa pylint: disable=broad-except
+            logger.error("Ondemand prices load failed. I won't retry for another day. Error: %s", str(exception))
+            spot_error.labels(code='ondemand_failure').inc()  # noqa pylint: disable=E1101
+    else:
+        return last_ondemand_update
+
+
+def load_config(running_in_cluster):
+    '''Load the correct Kubernetes config based on in-cluster or not'''
+    if running_in_cluster:
+        config.incluster_config.load_incluster_config()
+    else:
+        config.load_kube_config()
+
+
 def main():
     '''Main'''
     args = get_args()
@@ -173,29 +210,29 @@ def main():
         if product not in ALLOWED_PRODUCTS:
             raise ValueError('invalid product {}, expected one of {}'.format(product, ALLOWED_PRODUCTS))
 
-    if args.running_in_cluster:
-        config.incluster_config.load_incluster_config()
-    else:
-        config.load_kube_config()
+    load_config(args.running_in_cluster)
 
     k8s_client = client.CoreV1Api()
     ec2 = boto3.client('ec2', args.region)
     start_http_server(args.metrics_port)
 
     on_demand_spot_gauge = None
-    spot_gauge = Gauge('aws_spot_price_dollars_per_hour',
-                       'Reports the AWS spot price of node types used in the cluster',
-                       ['instance_type', 'availability_zone']
-                       )
-    spot_error = Counter('aws_spot_price_request_errors',
-                         'Reports errors while calling the AWS api.',
-                         ['code']
-                         )
+    spot_gauge = Gauge(
+        'aws_spot_price_dollars_per_hour',
+        'Reports the AWS spot price of node types used in the cluster',
+        ['instance_type', 'availability_zone']
+    )
+    spot_error = Counter(
+        'aws_spot_price_request_errors',
+        'Reports errors while calling the AWS api.',
+        ['code']
+    )
     if args.on_demand:
-        on_demand_spot_gauge = Gauge('aws_on_demand_dollars_per_hour',
-                                     'Reports the AWS ondemand of node types used in the cluster',
-                                     ['instance_type', 'availability_zone']
-                                     )
+        on_demand_spot_gauge = Gauge(
+            'aws_on_demand_dollars_per_hour',
+            'Reports the AWS ondemand of node types used in the cluster',
+            ['instance_type', 'availability_zone']
+        )
 
     last_ondemand_update = 0
     backoff_multiplier = 1
@@ -214,23 +251,13 @@ def main():
                 backoff_multiplier *= 2
         update_spot_price_metrics(spot_gauge, spot_prices)
 
-        # refresh ondemand prices each day
-        if args.on_demand and last_ondemand_update + 86400 < time.time():
-            try:
-                last_ondemand_update = time.time()
-                price_zones = {}
-                price_instance_types = {}
-                for price in spot_prices:
-                    price_zones[price['AvailabilityZone']] = 1
-                    price_instance_types[price['InstanceType']] = 1
-                ondemand_prices = get_ondemand_price_metrics()
-                update_ondemand_price_metrics(
-                    on_demand_spot_gauge,
-                    ondemand_prices,
-                    price_instance_types.keys(), price_zones.keys())
-            except Exception as exception:
-                logger.error("Ondemand prices load failed. I won't retry for another day. Error: %s", str(exception))
-                spot_error.labels(code='ondemand_failure').inc()  # noqa pylint: disable=E1101
+        last_ondemand_update = update_ondemand_prices(
+            args.on_demand,
+            last_ondemand_update,
+            on_demand_spot_gauge,
+            spot_prices,
+            spot_error
+        )
 
         time.sleep(args.scrape_interval * backoff_multiplier)
 
