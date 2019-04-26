@@ -168,9 +168,9 @@ def update_ondemand_price_metrics(metric, prices, types, zones):
             ).set(prices[region][instance_type])
 
 
-def update_ondemand_prices(on_demand, last_ondemand_update, on_demand_spot_gauge, spot_prices, spot_error):
+def update_ondemand_prices(last_ondemand_update, on_demand_spot_gauge, spot_prices, spot_error):
     '''Refresh ondemand prices once a day'''
-    if on_demand and last_ondemand_update + 86400 < time.time():
+    if last_ondemand_update + 86400 < time.time():
         try:
             last_ondemand_update = time.time()
             price_zones = {}
@@ -199,6 +199,13 @@ def load_config(running_in_cluster):
         config.load_kube_config()
 
 
+def check_allowed_products(products):
+    '''Raises and error if an invalid product is requested'''
+    for product in products:
+        if product not in ALLOWED_PRODUCTS:
+            raise ValueError('invalid product {}, expected one of {}'.format(product, ALLOWED_PRODUCTS))
+
+
 def main():
     '''Main'''
     args = get_args()
@@ -206,10 +213,7 @@ def main():
     logging_level = logging.DEBUG if args.verbose else logging.WARN
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging_level)
 
-    for product in args.products:
-        if product not in ALLOWED_PRODUCTS:
-            raise ValueError('invalid product {}, expected one of {}'.format(product, ALLOWED_PRODUCTS))
-
+    check_allowed_products(args.products)
     load_config(args.running_in_cluster)
 
     k8s_client = client.CoreV1Api()
@@ -251,13 +255,13 @@ def main():
                 backoff_multiplier *= 2
         update_spot_price_metrics(spot_gauge, spot_prices)
 
-        last_ondemand_update = update_ondemand_prices(
-            args.on_demand,
-            last_ondemand_update,
-            on_demand_spot_gauge,
-            spot_prices,
-            spot_error
-        )
+        if args.on_demand:
+            last_ondemand_update = update_ondemand_prices(
+                last_ondemand_update,
+                on_demand_spot_gauge,
+                spot_prices,
+                spot_error
+            )
 
         time.sleep(args.scrape_interval * backoff_multiplier)
 
