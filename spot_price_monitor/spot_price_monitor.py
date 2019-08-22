@@ -39,13 +39,35 @@ def get_zones_from_k8s(k8s_client):
     return list(availability_zones)
 
 
+def matches_label(label, node_labels):
+    '''
+    Returns true if the label provided is the node metadata labels. Supports
+    both new and node-role label schema. Old depreciated in v1.15, removed in
+    1.16. Support for both is intended to ease the transition.
+    '''
+
+    # determine if the label is new or old schema
+    split = label.split("=", 2)
+
+    if len(split) == 1:  # no '='
+        return label in node_labels
+    if len(split) == 2:  # one '='
+        label_key = split[0]
+        label_val = split[1]
+
+        val = node_labels[label_key]
+        return val == label_val
+
+    return False
+
+
 def get_instance_types_from_k8s(k8s_client, label):
     '''Returns a list of unique instance types used in the cluster'''
 
     nodes = k8s_client.list_node(watch=False)
     instance_types = set([])
     for node in nodes.items:
-        if label in node.metadata.labels:
+        if matches_label(label, node.metadata.labels):
             instance_types.add(
                 node.metadata.labels['beta.kubernetes.io/instance-type']
                 )
@@ -124,7 +146,7 @@ def get_args():
     parser.add_argument('-l', '--spot-label', type=str, required=False,
                         help='''Specifies the label that identifies nodes as
                         spot instances.''',
-                        default='node-role.kubernetes.io/spot-worker')
+                        default='kubernetes.io/role=spot-worker')
     parser.add_argument('-i', '--scrape-interval', type=int, default=60,
                         help='''How often (in seconds) should the prices be
                         scraped from AWS (Default: 60)''')
@@ -209,6 +231,10 @@ def check_allowed_products(products):
 def main():
     '''Main'''
     args = get_args()
+
+    if len(args.spot_label.split("=", 2)) > 2:
+        raise ValueError("""the spot node label is not correctly formatted:
+         expected '<label_name>' or '<label_name>=<label_value>', but got {}""".format(args.spot_label))
 
     logging_level = logging.DEBUG if args.verbose else logging.WARN
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging_level)
