@@ -1,5 +1,7 @@
 # Spot Price Monitor
 
+> NOTE: this repository is currently **UNMAINTAINED** and is looking for new owner(s). See [#19](/../../issues/19) for more information.
+
 ## Table of contents
 * [Introduction](#introduction)
 * [Usage](#usage)
